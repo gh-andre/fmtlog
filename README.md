@@ -1,3 +1,43 @@
+# Forked fmtlog Notes
+
+This project is intended as an experimental project to test `fmtlog`
+v2.1.1. It is not actively maintained. Use at your own risk.
+
+This section describes changes in this project, compared to the
+upstream project.
+
+Each configuration builds only one type of the `fmtlog` library,
+which can be a static or a shared library for a debug and a release
+configuration.
+
+On Windows following libraries will be built:
+
+   * `libfmtlog.lib` (static/release)
+   * `libfmtlogd.lib` (static/debug)
+
+On Linux following libraries will be built:
+
+   * `libfmtlog.a` (static/release)
+   * `libfmtlogd.a` (static/debug)
+   * `libfmtlog.so` (shared/release)
+   * `libfmtlogd.dll` (shared/debug)
+
+See `CMakeLists.txt` file for detailed build instructions for
+all supported configurations.
+
+If `fmt` is installed system-wide, as opposed to using the one
+managed as a Git submodule within this project, versions other than
+8.1.0 were not tested and may not compile or work.
+
+`FMTLOG_BUNDLED_FMT` will generate inconsistent installation and
+should be avoided in favor of installing `fmt` on its own. See
+comments inside the conditional `FMTLOG_BUNDLED_FMT` block in
+`CMakeLists.txt` for additional details on installation locations.
+
+Benchmark configurations were not updated and will not build,
+even though they are left in the build configuration for
+visibility.
+
 # fmtlog
 fmtlog is a performant asynchronous logging library using [fmt](https://github.com/fmtlib/fmt) library format.
 
