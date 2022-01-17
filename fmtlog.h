@@ -614,12 +614,12 @@ public:
     size_t alloc_size = 8 + getArgSizes<0>(cstringSizes, args...);
     if (threadBuffer == nullptr) preallocate();
     do {
-      auto header = threadBuffer->varq.allocMsg(alloc_size);
+      typename SPSCVarQueueOPT::MsgHeader *header = threadBuffer->varq.allocMsg(alloc_size);
       if (!header) continue;
       header->logId = logId;
       char* out = (char*)(header + 1);
       *(int64_t*)out = tsc;
-      out += 8;
+      out += sizeof(int64_t);
       encodeArgs<0>(cstringSizes, out, std::forward<Args>(args)...);
       header->push(alloc_size);
     } while (FMTLOG_BLOCK);
@@ -631,20 +631,26 @@ public:
     if constexpr (num_named_args == 0) {
       fmt::detail::check_format_string<Args...>(format);
     }
+
+    logOnceV(location, level, format, fmt::make_format_args(std::forward<Args>(args)...));
+  }
+
+  template<typename S>
+  inline void logOnceV(const char* location, LogLevel level, const S& format, fmt::format_args&& fmt_args)
+  {
     fmt::string_view sv(format);
-    auto&& fmt_args = fmt::make_format_args(args...);
     size_t fmt_size = formatted_size(sv, fmt_args);
-    size_t alloc_size = 8 + 8 + fmt_size;
+    size_t alloc_size = sizeof(int64_t) + sizeof(const char*) + fmt_size;
     if (threadBuffer == nullptr) preallocate();
     do {
-      auto header = threadBuffer->varq.allocMsg(alloc_size);
+      typename SPSCVarQueueOPT::MsgHeader *header = threadBuffer->varq.allocMsg(alloc_size);
       if (!header) continue;
       header->logId = (uint32_t)level;
       char* out = (char*)(header + 1);
       *(int64_t*)out = tscns.rdtsc();
-      out += 8;
+      out += sizeof(int64_t);
       *(const char**)out = location;
-      out += 8;
+      out += sizeof(const char*);
       vformat_to(out, sv, fmt_args);
       header->push(alloc_size);
     } while (FMTLOG_BLOCK);
@@ -701,12 +707,26 @@ inline typename fmtlogT<_>::LogLevel fmtlogT<_>::getLogLevel() {
     fmtlogWrapper<>::impl.log(logId, tsc, __FMTLOG_LOCATION, level, FMT_STRING(format), ##__VA_ARGS__);                \
   } while (0)
 
-#define FMTLOG_ONCE(level, format, ...)                                                                                \
+//
+// Logs a formatted message with the specified source location.
+// 
+// Unlike other logging macros, this macro allows `format` to be
+// any string type, such as a `const char*`, `std::string_view`,
+// `std::string`, etc.
+// 
+// The location string is expected to be a concatenation of the
+// source file and line number, exactly as `__FMTLOG_LOCATION`
+// macro would generate.
+//
+#define FMTLOG_ONCE_LOCATION(level, location, format, ...)                                                             \
   do {                                                                                                                 \
     if (level < fmtlog::getLogLevel()) break;                                                                          \
                                                                                                                        \
-    fmtlogWrapper<>::impl.logOnce(__FMTLOG_LOCATION, level, FMT_STRING(format), ##__VA_ARGS__);                        \
+    fmtlogWrapper<>::impl.logOnce(location, level, format, ##__VA_ARGS__);                                               \
   } while (0)
+
+#define FMTLOG_ONCE(level, format, ...)                                                                                \
+    FMTLOG_ONCE_LOCATION(level, __FMTLOG_LOCATION, format, ##__VA_ARGS__);
 
 #if FMTLOG_ACTIVE_LEVEL <= FMTLOG_LEVEL_DBG
 #define logd(format, ...) FMTLOG(fmtlog::DBG, format, ##__VA_ARGS__)
