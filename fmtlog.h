@@ -614,14 +614,15 @@ public:
     size_t alloc_size = 8 + getArgSizes<0>(cstringSizes, args...);
     if (threadBuffer == nullptr) preallocate();
     do {
-      typename SPSCVarQueueOPT::MsgHeader *header = threadBuffer->varq.allocMsg(alloc_size);
-      if (!header) continue;
-      header->logId = logId;
-      char* out = (char*)(header + 1);
-      *(int64_t*)out = tsc;
-      out += sizeof(int64_t);
-      encodeArgs<0>(cstringSizes, out, std::forward<Args>(args)...);
-      header->push(alloc_size);
+      if (auto header = threadBuffer->varq.allocMsg(alloc_size)) {
+        header->logId = logId;
+        char* out = (char*)(header + 1);
+        *(int64_t*)out = tsc;
+        out += 8;
+        encodeArgs<0>(cstringSizes, out, std::forward<Args>(args)...);
+        header->push(alloc_size);
+        break;
+      }
     } while (FMTLOG_BLOCK);
   }
 
@@ -643,16 +644,17 @@ public:
     size_t alloc_size = sizeof(int64_t) + sizeof(const char*) + fmt_size;
     if (threadBuffer == nullptr) preallocate();
     do {
-      typename SPSCVarQueueOPT::MsgHeader *header = threadBuffer->varq.allocMsg(alloc_size);
-      if (!header) continue;
-      header->logId = (uint32_t)level;
-      char* out = (char*)(header + 1);
-      *(int64_t*)out = tscns.rdtsc();
-      out += sizeof(int64_t);
-      *(const char**)out = location;
-      out += sizeof(const char*);
-      vformat_to(out, sv, fmt_args);
-      header->push(alloc_size);
+      if (auto header = threadBuffer->varq.allocMsg(alloc_size)) {
+        header->logId = (uint32_t)level;
+        char* out = (char*)(header + 1);
+        *(int64_t*)out = tscns.rdtsc();
+        out += 8;
+        *(const char**)out = location;
+        out += 8;
+        vformat_to(out, sv, fmt_args);
+        header->push(alloc_size);
+        break;
+      }
     } while (FMTLOG_BLOCK);
   }
 };
