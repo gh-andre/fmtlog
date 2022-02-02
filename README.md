@@ -38,6 +38,12 @@ Benchmark configurations were not updated and will not build,
 even though they are left in the build configuration for
 visibility.
 
+This branch contains a fix that is cherry-picked from a single
+commit tagged `v2.1.2`. This is done to avoid taking more
+significant changes between `v2.1.1` and `v2.1.2`, in order to
+keep this branch better aligned with the level of changes
+expected from a patch fix.
+
 # fmtlog
 fmtlog is a performant asynchronous logging library using [fmt](https://github.com/fmtlib/fmt) library format.
 
