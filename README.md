@@ -25,6 +25,10 @@ On Linux following libraries will be built:
 See `CMakeLists.txt` file for detailed build instructions for
 all supported configurations.
 
+The source was changed to include `fmt` from a system location,
+via `#include` directives using angle brackets. The expectation
+is that `fmt` is installed on its own and not as a Git submodule.
+
 If `fmt` is installed system-wide, as opposed to using the one
 managed as a Git submodule within this project, versions other than
 8.1.0 were not tested and may not compile or work.
@@ -43,6 +47,10 @@ commit tagged `v2.1.2`. This is done to avoid taking more
 significant changes between `v2.1.1` and `v2.1.2`, in order to
 keep this branch better aligned with the level of changes
 expected from a patch fix.
+
+A new macro `FMTLOG_ONCE_LOCATION` was introduced to allow callers
+supply source location information instead of using that of the
+current line. Otherwise this macro behaves like `FMTLOG_ONCE`.
 
 # fmtlog
 fmtlog is a performant asynchronous logging library using [fmt](https://github.com/fmtlib/fmt) library format.
