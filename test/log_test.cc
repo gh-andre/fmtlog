@@ -13,6 +13,10 @@ void logcb(int64_t ns, fmtlog::LogLevel level, fmt::string_view location, size_t
   fmt::print("callback msg body: {}\n", msg);
 }
 
+void logQFullCB() {
+  fmt::print("log q full\n");
+}
+
 int main() {
   char randomString[] = "Hello World";
   logi("A string, pointer, number, and float: '{}', {}, {}, {}", randomString, (void*)&randomString, 512, 3.14159);
@@ -63,9 +67,17 @@ int main() {
   fmtlog::setLogCB(logcb, fmtlog::WRN);
   logw("This msg will be called back");
 
+#ifndef _WIN32
   fmtlog::setLogFile("/tmp/wow", false);
   for (int i = 0; i < 10; i++) {
     logw("test logfilepos: {}.", i);
+  }
+#endif
+
+  fmtlog::setLogQFullCB(logQFullCB);
+  for (int i = 0; i < 1024; i++) {
+    std::string str(1000, ' ');
+    logi("log q full cb test: {}", str);
   }
 
   fmtlog::poll();

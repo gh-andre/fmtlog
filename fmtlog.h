@@ -137,6 +137,9 @@ public:
   // Set a callback function for all log msgs with a mininum log level
   static void setLogCB(LogCBFn cb, LogLevel minCBLogLevel);
 
+  typedef void (*LogQFullCBFn)();
+  static void setLogQFullCB(LogQFullCBFn cb) FMT_NOEXCEPT;
+
   // Close the log file and subsequent msgs will not be written into the file,
   // but callback function can still be used
   static void closeLogFile();
@@ -333,6 +336,8 @@ public:
   static size_t formatted_size(fmt::string_view fmt, fmt::format_args args);
 
   static void vformat_to(char* out, fmt::string_view fmt, fmt::format_args args);
+
+  static typename SPSCVarQueueOPT::MsgHeader* allocMsg(uint32_t size, bool logQFullCB);
 
   TSCNS tscns;
 
@@ -611,10 +616,10 @@ public:
     }
     constexpr size_t num_cstring = fmt::detail::count<isCstring<Args>()...>();
     size_t cstringSizes[std::max(num_cstring, (size_t)1)];
-    size_t alloc_size = 8 + getArgSizes<0>(cstringSizes, args...);
-    if (threadBuffer == nullptr) preallocate();
+    uint32_t alloc_size = 8 + (uint32_t)getArgSizes<0>(cstringSizes, args...);
+    bool q_full_cb = true;
     do {
-      if (auto header = threadBuffer->varq.allocMsg(alloc_size)) {
+      if (auto header = allocMsg(alloc_size, q_full_cb)) {
         header->logId = logId;
         char* out = (char*)(header + 1);
         *(int64_t*)out = tsc;
@@ -623,6 +628,7 @@ public:
         header->push(alloc_size);
         break;
       }
+      q_full_cb = false;
     } while (FMTLOG_BLOCK);
   }
 
@@ -643,8 +649,9 @@ public:
     size_t fmt_size = formatted_size(sv, fmt_args);
     size_t alloc_size = sizeof(int64_t) + sizeof(const char*) + fmt_size;
     if (threadBuffer == nullptr) preallocate();
+    bool q_full_cb = true;
     do {
-      if (auto header = threadBuffer->varq.allocMsg(alloc_size)) {
+      if (auto header = allocMsg(alloc_size, q_full_cb)) {
         header->logId = (uint32_t)level;
         char* out = (char*)(header + 1);
         *(int64_t*)out = tscns.rdtsc();
@@ -655,6 +662,7 @@ public:
         header->push(alloc_size);
         break;
       }
+      q_full_cb = false;
     } while (FMTLOG_BLOCK);
   }
 };
