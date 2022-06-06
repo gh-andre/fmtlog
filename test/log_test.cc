@@ -68,10 +68,12 @@ int main() {
   fmtlog::setLogCB(logcb, fmtlog::WRN);
   logw("This msg will be called back");
 
+#ifndef _WIN32
   fmtlog::setLogFile("/tmp/wow", false);
   for (int i = 0; i < 10; i++) {
     logw("test logfilepos: {}.", i);
   }
+#endif
 
   fmtlog::setLogQFullCB(logQFullCB, nullptr);
   for (int i = 0; i < 1024; i++) {
