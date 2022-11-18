@@ -1,7 +1,11 @@
 #include <chrono>
 #include <iostream>
+#include <string_view>
+#include <optional>
 
 #include "../fmtlog.h"
+
+using namespace std::literals::string_view_literals;
 
 void runBenchmark();
 
@@ -10,6 +14,45 @@ void logcb(int64_t ns, fmtlog::LogLevel level, fmt::string_view location, size_t
   fmt::print("callback full msg: {}, logFilePos: {}\n", msg, logFilePos);
   msg.remove_prefix(bodyPos);
   fmt::print("callback msg body: {}\n", msg);
+}
+
+std::optional<std::string_view> msgCB(std::string_view msg, std::string& msgCBStr, void* userData)
+{
+    size_t start = 0, pos = 0;
+
+    std::string *newmsg = nullptr;
+    
+    while(start < msg.length() && (pos = msg.find_first_of("\r\n"sv, start)) != std::string_view::npos) {
+        if(!newmsg) {
+            newmsg = &msgCBStr;
+            newmsg->clear();
+        }
+
+        // add the chunk between current starting position and the filtered character
+        if(pos > start)
+            newmsg->append(msg.data()+start, pos-start);
+
+        // keep replacements distinct, so they can be converted back if needed
+        switch(*(msg.data()+pos)) {
+            case '\r':
+                *newmsg += "_\\r_"sv;
+                break;
+            case '\n':
+                *newmsg += "_\\n_"sv;
+                break;
+        }
+        
+        start = pos+1;
+    }
+
+    if(newmsg) {
+        // if there's last segment, append it
+        if(start < msg.length())
+            newmsg->append(msg.data()+start, msg.length()-start);
+    }
+
+    // must construct string view explicitly, or a bad string view is created for a temporary optional<string>
+    return newmsg ? std::make_optional<std::string_view>(*newmsg) : std::nullopt;
 }
 
 void logQFullCB(void* userData) {
@@ -45,6 +88,13 @@ int main() {
 
   fmtlog::poll();
 
+  fmtlog::setMsgCB(msgCB, nullptr);
+
+  logi("Line breaks: {:s}, {:d}, {:s}", "ABC\n\nXYZ", 123, "D\rE\nFGH");
+  logi("Line breaks: {:s}", "ABC XYZ\n");
+
+  fmtlog::poll();
+
   for (int i = 0; i < 3; i++) {
     logio("log once: {}", i);
   }
@@ -65,7 +115,7 @@ int main() {
 
   fmtlog::poll();
 
-  fmtlog::setLogCB(logcb, fmtlog::WRN);
+  fmtlog::setLogCB(logcb, fmtlog::DBG);
   logw("This msg will be called back");
 
 #ifndef _WIN32
@@ -82,7 +132,7 @@ int main() {
   }
 
   fmtlog::poll();
-  runBenchmark();
+//  runBenchmark();
 
   return 0;
 }

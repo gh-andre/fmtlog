@@ -30,6 +30,9 @@ SOFTWARE.
 #include <atomic>
 #include <thread>
 #include <memory>
+#include <optional>
+#include <string>
+#include <string_view>
 
 #ifdef _MSC_VER
 #include <intrin.h>
@@ -135,8 +138,34 @@ public:
                           fmt::string_view threadName, fmt::string_view msg, size_t bodyPos,
                           size_t logFilePos);
 
+  //
+  // A user-provided function to examine the message body for
+  // special characters, such as line breaks, and replace the
+  // original message, if needed.
+  // 
+  // This function is called from fmtlog::poll, which is always
+  // called from a single thread.
+  // 
+  // The function should return std::nullopt if the message can
+  // be logged as-is. Otherwise, the returned string view will
+  // be used instead of the original message.
+  // 
+  // msgCBStr may be used as a formatting buffer and should not
+  // be changed if the original message should be logged. Its
+  // content is never evaluated directly - only the returned
+  // string view is used, if the optional is not empty.
+  //
+  // msgBody: a formatted message body, without header fields
+  // msgCBStr: a string used as a formatting buffer in MsgCBFn
+  // userData: a user-provided pointer
+  // 
+  typedef std::optional<std::string_view> (*MsgCBFn)(std::string_view msgBody, std::string& msgCBStr, void* userData);
+
   // Set a callback function for all log msgs with a mininum log level
   static void setLogCB(LogCBFn cb, LogLevel minCBLogLevel) noexcept;
+
+  // Set a callback function for replacing special characters in log messages.
+  static void setMsgCB(MsgCBFn cb, void* userData) noexcept;
 
   typedef void (*LogQFullCBFn)(void* userData);
   static void setLogQFullCB(LogQFullCBFn cb, void* userData) noexcept;
