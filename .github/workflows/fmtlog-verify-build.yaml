@@ -1,0 +1,18 @@
+#
+# This workflow file doesn't do anything and exists only because
+# GitHub requires one in the trunk to show workflows in Actions.
+# See patch branches for actual workflow files.
+#
+name: verify fmtlog build
+
+on: workflow_dispatch
+
+jobs:
+  empty-job:
+    name: empty
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: empty job
+      run: echo empty job
+      
