@@ -13,6 +13,7 @@ set(FMTLOG_LIB_NAME fmtlog)
 
 option(FMTLOG_BUILD_TEST "Build fmtlog tests?" OFF)
 option(FMTLOG_BUNDLED_FMT "Bundle fmt with fmtlog?" OFF)
+option(FMTLOG_FULL_BUFFER_BLOCK "Block when buffer is full (ON) or discard (OFF)?" OFF)
 
 #
 # fmtlog source doesn't implement exports with __declspec(dllexport)
@@ -132,6 +133,11 @@ install(FILES fmtlog.h fmtlog-inl.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/fmtl
 
 if(BUILD_SHARED_LIBS)
   add_library(${FMTLOG_LIB_NAME} SHARED fmtlog.cc)
+
+  if(DEFINED FMTLOG_FMT_LIB_DIR)
+    target_link_directories(${FMTLOG_LIB_NAME} PUBLIC ${FMTLOG_FMT_LIB_DIR})
+  endif()
+
   target_link_libraries(${FMTLOG_LIB_NAME} PUBLIC fmt$<$<CONFIG:Debug>:d>)
   install(TARGETS ${FMTLOG_LIB_NAME} LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
 else ()
@@ -140,6 +146,13 @@ else ()
 endif()
 
 set_target_properties(${FMTLOG_LIB_NAME} PROPERTIES DEBUG_POSTFIX d)
+
+# must also be defined in projects using fmtlog (used in an inline function)
+target_compile_definitions(${FMTLOG_LIB_NAME} PUBLIC -DFMTLOG_BLOCK=$<BOOL:${FMTLOG_FULL_BUFFER_BLOCK}>)
+
+if(FMTLOG_BUNDLED_FMT)
+  add_dependencies(${FMTLOG_LIB_NAME} fmt)
+endif()
 
 if(FMTLOG_BUILD_TEST)
   add_subdirectory(test)

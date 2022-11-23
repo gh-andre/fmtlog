@@ -78,6 +78,7 @@ if(NOT MSVC)
 endif()
 
 add_executable(log_test log_test.cc)
+target_compile_definitions(log_test PUBLIC -DFMTLOG_BLOCK=$<BOOL:${FMTLOG_FULL_BUFFER_BLOCK}>)
 target_link_libraries(log_test fmtlog fmt$<$<CONFIG:Debug>:d>)
 #target_compile_definitions(log_test PUBLIC FMTLOG_HEADER_ONLY)
 install(TARGETS log_test)
