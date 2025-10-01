@@ -1,0 +1,110 @@
+#
+# This is a build verification workflow and it does not produce
+# any packages.
+#
+name: verify fmtlog build
+
+on: workflow_dispatch
+
+env:
+  BUILD_DIR: build
+  INSTALL_PREFIX: install
+
+jobs:
+  build-windows:
+    name: Build fmtlog on Windows
+    runs-on: windows-2022
+    strategy:
+      matrix:
+        build-config: [Release, Debug]
+
+    steps:
+    - name: Checkout source
+      uses: actions/checkout@v3
+
+    - name: Clone fmt submodule
+      run: |
+        git submodule init fmt
+        git submodule update fmt
+
+      #
+      # Visual Studio is a multi-configuration build system and
+      # build configuration from matrix.build-config is supplied
+      # at build time.
+      #
+    - name: Generate build system
+      run: |
+        cmake -S . -B ${{ env.BUILD_DIR }} -DFMTLOG_BUILD_TEST=ON -DFMTLOG_BUNDLED_FMT=ON
+
+      # only static library can be built on Windows
+    - name: Build static library
+      run: |
+        cmake --build ${{ env.BUILD_DIR }} --config ${{ matrix.build-config }}
+
+      # log_test is not included because it has a hard-coded reference to /tmp
+    - name: Run tests
+      working-directory: ${{ env.BUILD_DIR }}/test/${{ matrix.build-config }}
+      run: |
+        .\enc_dec_test.exe
+        .\multithread_test.exe
+
+    - name: Run install
+      run: |
+        cmake --install ${{ env.BUILD_DIR }} --config ${{ matrix.build-config }} --prefix ${{ env.INSTALL_PREFIX }}/${{ matrix.build-config }}
+
+  build-ubuntu:
+    name: Build fmtlog on Ubuntu
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        build-config: [Release, Debug]
+        lib-type: [shared, static]
+        include:
+        - lib-type: shared
+          cmake-build-shared-libs: -DBUILD_SHARED_LIBS=ON
+
+    steps:
+    - name: Checkout source
+      uses: actions/checkout@v3
+
+      #
+      # Choose the simpler approach for this test build and clone
+      # the fmt submodule. A better approach is to build and install
+      # fmt on its own and build fmtlog and the application using it
+      # against fmt installed into /usr/local.
+      #
+    - name: Clone fmt submodule
+      run: |
+        git submodule init fmt
+        git submodule update fmt
+
+      #
+      # Makefile is a single-configuration build system and build
+      # configuration from matrix.build-config is supplied at this
+      # point.
+      #
+    - name: Generate build system
+      run: |
+        cmake -S . -B ${{ env.BUILD_DIR }}/${{ matrix.build-config }} -DCMAKE_BUILD_TYPE=${{ matrix.build-config }} -DFMTLOG_BUILD_TEST=ON -DFMTLOG_BUNDLED_FMT=ON ${{ matrix.cmake-build-shared-libs }}
+
+    - name: Build ${{ matrix.lib-type }} library
+      run: |
+        cmake --build ${{ env.BUILD_DIR }}/${{ matrix.build-config }}
+
+    - name: Run link tests
+      working-directory: ${{ env.BUILD_DIR }}/${{ matrix.build-config }}/test
+      run: |
+        ./link_${{ matrix.lib-type }}_static
+        ./link_${{ matrix.lib-type }}_shared
+        ./link_header_${{ matrix.lib-type }}
+
+    - name: Run tests
+      working-directory: ${{ env.BUILD_DIR }}/${{ matrix.build-config }}/test
+      run: |
+        ./log_test
+        ./enc_dec_test
+        ./multithread_test
+
+    - name: Run install
+      run: |
+        cmake --install ${{ env.BUILD_DIR }}/${{ matrix.build-config }} --prefix ${{ env.INSTALL_PREFIX }}/${{ matrix.build-config }}

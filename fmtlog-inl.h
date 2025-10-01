@@ -242,6 +242,9 @@ public:
   std::vector<StaticLogInfo> bgLogInfos;
 
   fmtlog::LogCBFn logCB = nullptr;
+  fmtlog::MsgCBFn msgCB = nullptr;
+  std::string msgCBStr;
+  void* msgCBFnArg = nullptr;
   fmtlog::LogLevel minCBLogLevel;
   fmtlog::LogQFullCBFn logQFullCB = fmtlogEmptyFun;
   void* logQFullCBArg = nullptr;
@@ -392,6 +395,15 @@ public:
     }
     else { // log once
       membuf.append(fmt::string_view(data, end - data));
+    }
+
+    if(msgCB) {
+        std::optional<std::string_view> newmsg = msgCB(std::string_view(membuf.data()+bodyPos, membuf.size()-bodyPos), msgCBStr, msgCBFnArg);
+        if(newmsg.has_value()) {
+            // overwrite the original message there's a replacement
+            membuf.resize(bodyPos);
+            membuf.append(newmsg.value());
+        }
     }
 
     if (logCB && info.logLevel >= minCBLogLevel) {
@@ -607,6 +619,13 @@ void fmtlogT<_>::setLogCB(LogCBFn cb, LogLevel minCBLogLevel_) noexcept {
   auto& d = fmtlogDetailWrapper<>::impl;
   d.logCB = cb;
   d.minCBLogLevel = minCBLogLevel_;
+}
+
+template<int _>
+void fmtlogT<_>::setMsgCB(MsgCBFn cb, void* userData) noexcept {
+  auto& d = fmtlogDetailWrapper<>::impl;
+  d.msgCB = cb;
+  d.msgCBFnArg = userData;
 }
 
 template<int _>

@@ -23,13 +23,16 @@ SOFTWARE.
 */
 #pragma once
 //#define FMT_HEADER_ONLY
-#include "fmt/format.h"
+#include <fmt/format.h>
 #include <type_traits>
 #include <vector>
 #include <chrono>
 #include <atomic>
 #include <thread>
 #include <memory>
+#include <optional>
+#include <string>
+#include <string_view>
 
 #ifdef _MSC_VER
 #include <intrin.h>
@@ -139,8 +142,34 @@ public:
                           fmt::string_view threadName, fmt::string_view msg, size_t bodyPos,
                           size_t logFilePos);
 
+  //
+  // A user-provided function to examine the message body for
+  // special characters, such as line breaks, and replace the
+  // original message, if needed.
+  // 
+  // This function is called from fmtlog::poll, which is always
+  // called from a single thread.
+  // 
+  // The function should return std::nullopt if the message can
+  // be logged as-is. Otherwise, the returned string view will
+  // be used instead of the original message.
+  // 
+  // msgCBStr may be used as a formatting buffer and should not
+  // be changed if the original message should be logged. Its
+  // content is never evaluated directly - only the returned
+  // string view is used, if the optional is not empty.
+  //
+  // msgBody: a formatted message body, without header fields
+  // msgCBStr: a string used as a formatting buffer in MsgCBFn
+  // userData: a user-provided pointer
+  // 
+  typedef std::optional<std::string_view> (*MsgCBFn)(std::string_view msgBody, std::string& msgCBStr, void* userData);
+
   // Set a callback function for all log msgs with a mininum log level
   static void setLogCB(LogCBFn cb, LogLevel minCBLogLevel) noexcept;
+
+  // Set a callback function for replacing special characters in log messages.
+  static void setMsgCB(MsgCBFn cb, void* userData) noexcept;
 
   typedef void (*LogQFullCBFn)(void* userData);
   static void setLogQFullCB(LogQFullCBFn cb, void* userData) noexcept;
@@ -696,9 +725,14 @@ public:
   template<typename... Args>
   inline void logOnce(const char* location, LogLevel level, fmt::format_string<Args...> format,
                       Args&&... args) {
-    fmt::string_view sv(format);
-    auto&& fmt_args = fmt::make_format_args(args...);
-    uint32_t fmt_size = formatted_size(sv, fmt_args);
+
+    logOnceV(location, level, format, fmt::make_format_args(args...));
+  }
+
+  template<typename... Args>
+  inline void logOnceV(const char* location, LogLevel level, const fmt::string_view& format, fmt::format_args&& fmt_args)
+  {
+    uint32_t fmt_size = formatted_size(format, fmt_args);
     uint32_t alloc_size = 8 + 8 + fmt_size;
     bool q_full_cb = true;
     do {
@@ -709,7 +743,7 @@ public:
         out += 8;
         *(const char**)out = location;
         out += 8;
-        vformat_to(out, sv, fmt_args);
+        vformat_to(out, format, fmt_args);
         header->push(alloc_size);
         break;
       }
@@ -773,11 +807,21 @@ inline bool fmtlogT<_>::checkLogLevel(LogLevel logLevel) noexcept {
     fmtlogWrapper<>::impl.log(logId, tsc, __FMTLOG_LOCATION, level, format, ##__VA_ARGS__);        \
   } while (0)
 
-#define FMTLOG_ONCE(level, format, ...)                                                            \
+//
+// Logs a formatted message with the specified source location.
+// 
+// The location string is expected to be a concatenation of the
+// source file and line number, exactly as `__FMTLOG_LOCATION`
+// macro would generate.
+//
+#define FMTLOG_ONCE_LOCATION(level, location, format, ...)                                         \
   do {                                                                                             \
     if (!fmtlog::checkLogLevel(level)) break;                                                      \
-    fmtlogWrapper<>::impl.logOnce(__FMTLOG_LOCATION, level, format, ##__VA_ARGS__);                \
+    fmtlogWrapper<>::impl.logOnce(location, level, format, ##__VA_ARGS__);                         \
   } while (0)
+
+#define FMTLOG_ONCE(level, format, ...)                                                            \
+    FMTLOG_ONCE_LOCATION(level, __FMTLOG_LOCATION, format, ##__VA_ARGS__);
 
 #if FMTLOG_ACTIVE_LEVEL <= FMTLOG_LEVEL_DBG
 #define logd(format, ...) FMTLOG(fmtlog::DBG, format, ##__VA_ARGS__)
